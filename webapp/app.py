@@ -52,11 +52,9 @@ def _group_by_department(vacancies):
     all_departments = harvest.get_departments()
     vacancies_by_department = {}
 
-    departments_by_slug = {}
-
-    for department in all_departments:
-        departments_by_slug[department.slug] = department
-
+    departments_by_slug = {
+        department.slug: department for department in all_departments
+    }
     for vacancy in vacancies:
         for department in vacancy.departments:
             slug = department.slug
@@ -98,9 +96,7 @@ def _get_sorted_departments():
     sorted = {slug: departments[slug] for slug in sort_order}
     remaining_slugs = set(departments.keys()).difference(sort_order)
     remaining = {slug: departments[slug] for slug in remaining_slugs}
-    sorted_departments = {**sorted, **remaining}
-
-    return sorted_departments
+    return sorted | remaining
 
 
 def _get_all_departments() -> tuple:
@@ -347,9 +343,9 @@ def careers_progression():
 @app.route("/careers/company-culture/diversity")
 def diversity():
     context = {
-        "all_departments": _group_by_department(greenhouse.get_vacancies())
+        "all_departments": _group_by_department(greenhouse.get_vacancies()),
+        "department": None,
     }
-    context["department"] = None
     return flask.render_template(
         "careers/company-culture/diversity.html", **context
     )
@@ -672,20 +668,14 @@ def convert_to_kebab(kebab_input):
 
 @app.template_filter()
 def get_nav_path(path):
-    short_path = ""
     split_path = path.split("/")
-    if len(split_path) > 1:
-        short_path = path.split("/")[1]
-    return short_path
+    return path.split("/")[1] if len(split_path) > 1 else ""
 
 
 @app.template_filter()
 def get_secondary_nav_path(path):
-    secondary_path = ""
     split_path = path.split("/")
-    if len(split_path) > 2:
-        secondary_path = path.split("/")[2]
-    return secondary_path
+    return path.split("/")[2] if len(split_path) > 2 else ""
 
 
 @app.template_filter()
@@ -729,11 +719,11 @@ def filtered_html_tags(content):
 
 
 def allow_src(tag, name, value):
-    allowed_sources = ["www.youtube.com", "www.vimeo.com"]
     if name in ("alt", "height", "width"):
         return True
     if name == "src":
         p = urlparse(value)
+        allowed_sources = ["www.youtube.com", "www.vimeo.com"]
         return (not p.netloc) or p.netloc in allowed_sources
     return False
 
@@ -741,7 +731,7 @@ def allow_src(tag, name, value):
 @app.errorhandler(502)
 def bad_gateway(e):
     prefix = "502 Bad Gateway: "
-    if str(e).find(prefix) != -1:
+    if prefix in str(e):
         message = str(e)[len(prefix) :]
     return flask.render_template("502.html", message=message), 502
 

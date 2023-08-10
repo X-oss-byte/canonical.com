@@ -18,10 +18,14 @@ def _get_metadata(job, name):
         "is_fast_track": 12679300,
     }
 
-    for data in job["metadata"]:
-        if data["id"] == metadata_map[name]:
-            return data["value"]
-    return None
+    return next(
+        (
+            data["value"]
+            for data in job["metadata"]
+            if data["id"] == metadata_map[name]
+        ),
+        None,
+    )
 
 
 def _get_meta_title(job):
@@ -120,7 +124,7 @@ class Vacancy:
         self.employment_type: str = _get_metadata(job, "employment_type")
         self.slug: str = _get_job_slug(job)
         self.skills: list = _get_metadata(job, "skills") or []
-        self.is_remote: bool = False if job["offices"][0]["location"] else True
+        self.is_remote: bool = not job["offices"][0]["location"]
         self.featured: str = _get_metadata(job, "is_featured")
         self.fast_track: str = _get_metadata(job, "is_fast_track")
 
@@ -174,14 +178,11 @@ class Greenhouse:
     def get_vacancies(self):
         feed = self.session.get(f"{self.base_url}?content=true").json()
 
-        vacancies = []
-
-        for job in feed["jobs"]:
-            # Filter out those without departments or offices
-            if _get_metadata(job, "departments") and job["offices"]:
-                vacancies.append(Vacancy(job))
-
-        return vacancies
+        return [
+            Vacancy(job)
+            for job in feed["jobs"]
+            if _get_metadata(job, "departments") and job["offices"]
+        ]
 
     """
     Get vacancies where the department matches a given department slug
@@ -212,13 +213,11 @@ class Greenhouse:
             vacancies,
         )
 
-        sorted_vacancies = sorted(
+        return sorted(
             matching_vacancies,
             key=lambda vacancy: len(set(skills).intersection(vacancy.skills)),
             reverse=True,
         )
-
-        return sorted_vacancies
 
     """
     Retrieve a single job from Greenhouse by ID
@@ -370,7 +369,7 @@ class Harvest:
             "notes": notes,
             "rejection_email": {"email_template_id": 348528},
         }
-        response = self.session.post(
+        return self.session.post(
             f"{self.base_url}applications/{application_id}/reject",
             json=payload,
             headers={
@@ -379,5 +378,3 @@ class Harvest:
                 "Authorization": f"Basic {self.base64_key}",
             },
         )
-
-        return response
