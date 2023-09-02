@@ -127,7 +127,7 @@ def _sort_stages_by_milestone(
     - milestone: an order list of milestones as keys and
     sorted possible stages per milestone
     """
-    stages = [stage for stage in stages]
+    stages = list(stages)
     all_ordered_stages = [
         stage
         for stages_per_milestone in milestones.values()
@@ -250,13 +250,7 @@ def _get_application(application_id):
             except HTTPError as error:
                 print(error)
 
-            if (
-                # Currently only user with video
-                # as we don't have a source to pull this video from
-                # we still use the hiring_leads.json
-                recruiter["employee_id"] == "4268"
-                or recruiter["employee_id"] == "4289"
-            ):
+            if recruiter["employee_id"] in ["4268", "4289"]:
                 with open("webapp/hiring_leads.json") as json_file:
                     hiring_lead_list = json.load(json_file)
                     application["hiring_lead"]["video_src"] = hiring_lead_list[
@@ -300,7 +294,7 @@ def _get_application(application_id):
     application["role_name"] = _calculate_job_title(application)
 
     if application["rejected_at"]:
-        if not application["rejection_reason"]["type"]["id"] == 2:
+        if application["rejection_reason"]["type"]["id"] != 2:
             now = datetime.now(timezone.utc)
             rejection_time = parse(application["rejected_at"])
             time_after_rejection = int(
@@ -321,15 +315,13 @@ def _get_application_from_token(token):
 
 
 def _get_gia_feedback(attachments):
-    feedback_attachments = []
     THOMAS_FILENAME = "Thomas_International_Candidate_Feedback.pdf"
-    for attachment in attachments:
-        if attachment["filename"] and attachment["filename"].endswith(
-            THOMAS_FILENAME
-        ):
-            feedback_attachments.append(attachment)
-
-    return feedback_attachments
+    return [
+        attachment
+        for attachment in attachments
+        if attachment["filename"]
+        and attachment["filename"].endswith(THOMAS_FILENAME)
+    ]
 
 
 def _confirmation_token(
@@ -414,8 +406,7 @@ def application_index(token):
         if application["rejection_reason"]["type"]["id"] == 2:
             withdrawn = True
 
-    gia_feedback = _get_gia_feedback(application["attachments"])
-    if gia_feedback:
+    if gia_feedback := _get_gia_feedback(application["attachments"]):
         application["gia_feedback"] = gia_feedback
 
     return flask.render_template(
@@ -448,8 +439,7 @@ def application_report(token):
             }
         )
 
-    gia_feedback = _get_gia_feedback(application["attachments"])
-    if gia_feedback:
+    if gia_feedback := _get_gia_feedback(application["attachments"]):
         return flask.jsonify({"status": "success", "message": gia_feedback})
 
 
@@ -589,6 +579,8 @@ def job_location_countries(job_location):
     countries = []
     for region in regions:
         if region in job_location:
-            for country in regions[region]:
-                countries.append({"@type": "Country", "name": country})
+            countries.extend(
+                {"@type": "Country", "name": country}
+                for country in regions[region]
+            )
     return countries
